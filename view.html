@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Koulu</title>
+  <link rel="stylesheet" href="css.css">
+</head>
+<body>
+  <header>
+    <h1>Koulu</h1>
+    <span id="who"></span>
+    <button id="logoutBtn">Kirjaudu ulos</button>
+  </header>
+
+  <main id="content">
+    <p id="loading">Ladataan...</p>
+    <p id="errorBox" class="error" hidden></p>
+
+    <!-- OPISKELIJA: sivu 1, oppiaineet -->
+    <section id="subjectsPage" hidden>
+      <h2>Oppiaineet</h2>
+      <p id="noTasks" hidden>Ei tehtäviä.</p>
+      <div id="subjectList" class="grid"></div>
+    </section>
+
+    <!-- OPISKELIJA: sivu 2, yhden oppiaineen tehtävät -->
+    <section id="subjectPage" hidden>
+      <button class="back" id="backToSubjects">← Oppiaineet</button>
+      <h2 id="subjectTitle"></h2>
+      <div id="taskList"></div>
+    </section>
+
+    <!-- OPETTAJA: sivu 1, opiskelijalista -->
+    <section id="studentsPage" hidden>
+      <h2>Opiskelijat</h2>
+      <button class="primary" id="newTaskBtn">+ Uusi tehtävä</button>
+      <input id="search" class="search" placeholder="Hae opiskelijaa tai luokkaa...">
+      <select id="sortBox">
+        <option value="class">Järjestä luokan mukaan</option>
+        <option value="name">Järjestä nimen mukaan</option>
+      </select>
+      <div id="studentList"></div>
+    </section>
+
+    <!-- OPETTAJA: sivu 2, yhden opiskelijan tehtävät -->
+    <section id="studentPage" hidden>
+      <button class="back" id="backFromStudent">← Opiskelijat</button>
+      <h2 id="studentName"></h2>
+      <p class="small">Sähköposti: <span id="studentEmail"></span></p>
+      <p id="noStudentTasks" hidden>Ei tehtäviä tälle luokalle.</p>
+      <div id="studentTasks"></div>
+    </section>
+
+    <!-- OPETTAJA: sivu 3, uusi tehtävä -->
+    <section id="newTaskPage" hidden>
+      <button class="back" id="backFromNewTask">← Opiskelijat</button>
+      <h2>Uusi tehtävä</h2>
+      <article class="task">
+        <p>Oppiaine<br><select id="newSubject"></select></p>
+        <p>Luokka<br><select id="newClass"></select></p>
+        <p>Otsikko<br><input id="newTitle"></p>
+        <p>Tehtävänanto<br><textarea id="newDescription" rows="6"></textarea></p>
+        <p>Määräaika<br><input id="newDue" type="date"></p>
+        <button class="primary" id="saveTaskBtn">Luo tehtävä</button>
+        <span id="newTaskMsg" class="msg small"></span>
+      </article>
+    </section>
+  </main>
+
+  <!-- Mallit: JS kopioi näitä ja täyttää tiedot -->
+
+  <template id="subjectTemplate">
+    <button class="card subject-btn">
+      <span class="card-title"></span>
+      <span class="card-sub"></span>
+      <span class="badge"></span>
+    </button>
+  </template>
+
+  <template id="taskTemplate">
+    <article class="task">
+      <h3 class="title"></h3>
+      <p class="description"></p>
+      <p class="small">Määräaika: <span class="due"></span></p>
+      <textarea rows="4"></textarea>
+      <p class="graded" hidden>Arvosana: <b class="grade"></b><br>Palaute: <span class="feedback"></span></p>
+      <button class="primary submit-btn">Palauta</button>
+      <span class="msg small"></span>
+    </article>
+  </template>
+
+  <template id="studentRowTemplate">
+    <button class="row student-btn">
+      <span class="name"></span>
+      <span class="badge warn" hidden></span>
+    </button>
+  </template>
+
+  <template id="studentTaskTemplate">
+    <article class="task">
+      <h4><span class="title"></span> <span class="small due"></span></h4>
+      <p class="missing" hidden>Ei palautettu</p>
+      <div class="submission" hidden>
+        <span class="status"></span>
+        <p class="answer"></p>
+        <input class="grade" placeholder="Arvosana">
+        <textarea class="feedback" rows="2" placeholder="Palaute"></textarea>
+        <button class="primary grade-btn">Tallenna arvostelu</button>
+        <span class="msg small"></span>
+      </div>
+    </article>
+  </template>
+
+  <script type="module" src="view.js"></script>
+</body>
+</html>

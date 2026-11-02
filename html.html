@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Koulu - Kirjautuminen</title>
+  <link rel="stylesheet" href="css.css">
+</head>
+<body class="login-page">
+  <main class="card">
+    <h1 id="title">Kirjautuminen</h1>
+
+    <!-- näkyy vain tilin luonnissa -->
+    <div id="registerFields" hidden>
+      <select id="role">
+        <option value="student">Oppilas</option>
+        <option value="teacher">Opettaja</option>
+      </select>
+      <input id="firstName" placeholder="Etunimi">
+      <input id="lastName" placeholder="Sukunimi">
+      <select id="classSelect"></select>
+    </div>
+
+    <input id="email" type="email" placeholder="Sähköposti">
+    <input id="password" type="password" placeholder="Salasana (väh. 6 merkkiä)">
+
+    <button id="loginBtn">Kirjaudu</button>
+    <button id="registerBtn" hidden>Luo tili</button>
+
+    <a href="#" id="toggleLink">Ei tiliä? Luo tili</a>
+    <p id="message" class="error"></p>
+  </main>
+  <script type="module" src="login.js"></script>
+</body>
+</html>
