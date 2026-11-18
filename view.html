@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="fi">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Koulu</title>
   <link rel="stylesheet" href="css.css">
 </head>
+
 <body>
   <header>
     <h1>Koulu</h1>
@@ -19,9 +21,13 @@
 
     <!-- OPISKELIJA: sivu 1, oppiaineet -->
     <section id="subjectsPage" hidden>
-      <h2>Oppiaineet</h2>
+      <div id="messageBox" hidden>
+        <h3>Viestit</h3>
+        <div id="messageList"></div>
+      </div>
+
+      <div id="subjectList"></div>
       <p id="noTasks" hidden>Ei tehtäviä.</p>
-      <div id="subjectList" class="grid"></div>
     </section>
 
     <!-- OPISKELIJA: sivu 2, yhden oppiaineen tehtävät -->
@@ -45,13 +51,25 @@
 
     <!-- OPETTAJA: sivu 2, yhden opiskelijan tehtävät -->
     <section id="studentPage" hidden>
-      <button class="back" id="backFromStudent">← Opiskelijat</button>
+      <button id="backFromStudent">← Takaisin</button>
       <h2 id="studentName"></h2>
-      <p class="small">Sähköposti: <span id="studentEmail"></span></p>
-      <p id="noStudentTasks" hidden>Ei tehtäviä tälle luokalle.</p>
-      <div id="studentTasks"></div>
-    </section>
+      <p id="studentEmail"></p>
 
+      <!-- Viestilomake tähän, section-elementin sisään -->
+      <div id="messageForm">
+        <h3>Lähetä viesti</h3>
+        <select id="msgType">
+          <option value="message">Viesti</option>
+          <option value="warning">Varoitus</option>
+        </select>
+        <textarea id="msgText" rows="3" placeholder="Kirjoita viesti..."></textarea>
+        <button id="sendMsgBtn">Lähetä</button>
+        <span id="msgResult" class="msg small"></span>
+      </div>
+
+      <div id="studentTasks"></div>
+      <p id="noStudentTasks" hidden>Ei tehtäviä.</p>
+    </section>
     <!-- OPETTAJA: sivu 3, uusi tehtävä -->
     <section id="newTaskPage" hidden>
       <button class="back" id="backFromNewTask">← Opiskelijat</button>
@@ -68,7 +86,7 @@
     </section>
   </main>
 
-  <!-- Mallit: JS kopioi näitä ja täyttää tiedot -->
+  <!-- Mallit: view.js kopioi näitä ja täyttää tiedot -->
 
   <template id="subjectTemplate">
     <button class="card subject-btn">
@@ -114,4 +132,5 @@
 
   <script type="module" src="view.js"></script>
 </body>
+
 </html>

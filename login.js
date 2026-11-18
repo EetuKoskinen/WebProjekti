@@ -1,94 +1,130 @@
 import { supabase } from './supabase.js';
 
-const $ = id => document.getElementById(id);
-const message = $('message');
+// haetaan elementit
+const message = document.getElementById('message');
+const emailInput = document.getElementById('email');
+const passwordInput = document.getElementById('password');
+const registerFields = document.getElementById('registerFields');
+const roleSelect = document.getElementById('role');
+const classSelect = document.getElementById('classSelect');
 
-// jos jo kirjautunut, siirrytään view sivulle
-const { data: { session } } = await supabase.auth.getSession();
-if (session) location.href = 'view.html';
+// Jos jo kirjautunut, siirrytään view-sivulle
+async function checkSession() {
+  const result = await supabase.auth.getSession();
+  if (result.data.session) {
+    window.location.href = 'view.html';
+  }
+}
+checkSession();
 
-// KIRJAUTUMINEN
+// Kirjautuminen
 async function login() {
   message.textContent = '';
-  const { error } = await supabase.auth.signInWithPassword({
-    email: $('email').value.trim(),
-    password: $('password').value
-  });
-  if (error) {
-    message.textContent = 'Kirjautuminen epäonnistui: ' + error.message;
-    return;
+  const email = emailInput.value.trim();
+  const password = passwordInput.value;
+
+  const result = await supabase.auth.signInWithPassword({ email, password });
+
+  if (result.error) {
+    message.textContent = 'Kirjautuminen epäonnistui: ' + result.error.message;
+  } else {
+    window.location.href = 'view.html';
   }
-  location.href = 'view.html';
 }
 
-// TILIN LUONTI
+// Tilin luonti
 async function register() {
-  message.className = 'error';
   message.textContent = '';
+  const email = emailInput.value.trim();
+  const password = passwordInput.value;
+  const firstName = document.getElementById('firstName').value.trim();
+  const lastName = document.getElementById('lastName').value.trim();
+  const role = roleSelect.value; // 'student' tai 'teacher'
 
-  const firstName = $('firstName').value.trim(); // value.trim = removes whitespace
-  const lastName = $('lastName').value.trim();
-  if (!firstName || !lastName) {
+  if (firstName === '' || lastName === '') {
     message.textContent = 'Kirjoita etu- ja sukunimi.';
     return;
   }
 
-  const role = $('role').value; // 'student' tai 'teacher'
+  // vain oppilaalla on luokka
+  let classId = '';
+  if (role === 'student') {
+    classId = classSelect.value;
+  }
 
-  // rooli, nimi ja luokka kulkevat mukana, ja trigger luo niistä rivin
-  const { data, error } = await supabase.auth.signUp({
-    email: $('email').value.trim(),
-    password: $('password').value,
+  const result = await supabase.auth.signUp({
+    email: email,
+    password: password,
     options: {
       data: {
         role: role,
         first_name: firstName,
         last_name: lastName,
-        class_id: role === 'student' ? $('classSelect').value : ''
+        class_id: classId
       }
     }
   });
 
-  if (error) {
-    message.textContent = 'Tilin luonti epäonnistui: ' + error.message;
+  if (result.error) {
+    message.textContent = 'Tilin luonti epäonnistui: ' + result.error.message;
+  } else if (result.data.session) {
+    window.location.href = 'view.html';
+  }
+}
+
+// Haetaan luokat valikkoon
+async function loadClasses() {
+  const result = await supabase.from('classes').select('id, name').order('name');
+
+  if (result.error) {
+    console.log('Luokkien haku epäonnistui:', result.error.message);
     return;
   }
 
-  if (data.session) {
-    location.href = 'view.html';
+  classSelect.innerHTML = '';
+  for (const c of result.data) {
+    classSelect.innerHTML += '<option value="' + c.id + '">' + c.name + '</option>';
   }
 }
 
-// TILOJEN VAIHTO
-let registerMode = false;
-async function loadClasses() {
-  const { data, error } = await supabase.from('classes').select('id, name').order('name');
-  if (error) console.error('Luokkien haku epäonnistui:', error.message);
-  console.log('classes:', data);
-  $('classSelect').innerHTML = (data ?? [])
-    .map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-}
-
-// Ottaa textboxit ja listboxit pois piilosta
+// Vaihdetaan kirjautumisen ja rekisteröinnin välillä
 function setMode(isRegister) {
-  registerMode = isRegister;
   message.textContent = '';
-  $('registerFields').hidden = !isRegister;
-  $('registerBtn').hidden = !isRegister;
-  $('loginBtn').hidden = isRegister;
-  $('title').textContent = isRegister ? 'Luo tili' : 'Koulu';
-  $('toggleLink').textContent = isRegister ? 'Onko sinulla tili? Kirjaudu' : 'Ei tiliä? Luo tili';
-  if (isRegister) loadClasses();
+  registerFields.hidden = !isRegister;
+  document.getElementById('registerBtn').hidden = !isRegister;
+  document.getElementById('loginBtn').hidden = isRegister;
+
+  if (isRegister) {
+    document.getElementById('title').textContent = 'Luo tili';
+    document.getElementById('toggleLink').textContent = 'Onko sinulla tili? Kirjaudu';
+    loadClasses();
+  } else {
+    document.getElementById('title').textContent = 'Koulu';
+    document.getElementById('toggleLink').textContent = 'Ei tiliä? Luo tili';
+  }
 }
 
-// luokkavalinta näkyy vain oppilaalle
-$('role').onchange = () => {
-  $('classSelect').hidden = $('role').value === 'teacher';
+// Luokkavalinta näkyy vain oppilaalle
+roleSelect.onchange = function () {
+  classSelect.hidden = roleSelect.value === 'teacher';
 };
 
-$('toggleLink').onclick = e => { e.preventDefault(); setMode(!registerMode); };
-$('loginBtn').onclick = login;
-$('registerBtn').onclick = register;
-$('password').addEventListener('keydown', e => {
-  if (e.key === 'Enter') registerMode ? register() : login(); 
+document.getElementById('toggleLink').onclick = function (e) {
+  e.preventDefault();
+  // jos rekisteröinti on auki, mennään kirjautumiseen ja toisinpäin
+  setMode(registerFields.hidden);
+};
+
+document.getElementById('loginBtn').onclick = login;
+document.getElementById('registerBtn').onclick = register;
+
+// Enter-näppäin
+passwordInput.addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') {
+    if (registerFields.hidden) {
+      login();
+    } else {
+      register();
+    }
+  }
 });

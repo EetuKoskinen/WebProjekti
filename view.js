@@ -1,21 +1,23 @@
 import { supabase } from './supabase.js';
 
-const who = document.getElementById('who');
+const $ = id => document.getElementById(id);
 
 // Tiedot tallennetaan tänne
-let me = null; // kirjautunut opiskelija
+let me = null;             // kirjautunut opiskelija
+let teacherId = null;
+let currentStudent = null; // opiskelija, jonka sivu on auki (opettaja)
 let tasks = [];
 let submissions = [];
 let students = [];
+let messages = [];
 
-
-// ---------- Apufunktiot ----------
+//  Apufunktiot
 
 function formatDate(d) {
   return d ? new Date(d).toLocaleDateString('fi-FI') : '-';
 }
 
-// Hakee tiedot tietokannasta, virhe heitetään eteenpäin
+// Hakee tiedot tietokannasta. virhe heitetään eteenpäin
 async function hae(query) {
   const result = await query;
   if (result.error) throw result.error;
@@ -27,27 +29,26 @@ function showPage(id) {
   for (const page of document.querySelectorAll('main section')) {
     page.hidden = true;
   }
-  document.getElementById('loading').hidden = true;
-  document.getElementById('errorBox').hidden = true;
-  document.getElementById(id).hidden = false;
+  $('loading').hidden = true;
+  $('errorBox').hidden = true;
+  $(id).hidden = false;
 }
 
-function showError(error) {
-  document.getElementById('loading').hidden = true;
-  const box = document.getElementById('errorBox');
-  box.textContent = error.message;
-  box.hidden = false;
+function showError(text) {
+  $('loading').hidden = true;
+  $('errorBox').textContent = text;
+  $('errorBox').hidden = false;
 }
 
-// Näyttää napin vieressä "Tallennettu" tai virheen
-function showResult(el, error) {
-  el.textContent = error ? 'Virhe: ' + error.message : 'Tallennettu';
+// Näyttää napin vieressä onnistumisviestin tai virheen
+function showResult(el, error, okText = 'Tallennettu') {
+  el.textContent = error ? 'Virhe: ' + error.message : okText;
   el.className = 'msg small ' + (error ? 'error' : 'ok');
 }
 
 // Tekee kopion mallista (template)
 function copyTemplate(id) {
-  return document.getElementById(id).content.cloneNode(true);
+  return $(id).content.cloneNode(true);
 }
 
 function subjectName(task) {
@@ -58,13 +59,18 @@ function className(student) {
   return student.classes ? student.classes.name : '';
 }
 
-document.getElementById('logoutBtn').onclick = async () => {
+// Palauttaa opiskelijan vastauksen tehtävään
+function findSubmission(taskId, studentId) {
+  return submissions.find(s => s.assignment_id === taskId && s.student_id === studentId);
+}
+
+$('logoutBtn').onclick = async () => {
   await supabase.auth.signOut();
   location.href = 'html.html';
 };
 
 
-// ---------- Aloitus ----------
+// Aloitus 
 
 async function main() {
   const { data } = await supabase.auth.getSession();
@@ -79,7 +85,7 @@ async function main() {
     const student = await hae(supabase.from('students').select('*').eq('id', userId).maybeSingle());
     if (student) {
       me = student;
-      who.textContent = 'Opiskelija: ' + me.first_name + ' ' + me.last_name;
+      $('who').textContent = 'Opiskelija: ' + me.first_name + ' ' + me.last_name;
       await startStudent();
       return;
     }
@@ -87,51 +93,46 @@ async function main() {
     // Onko käyttäjä opettaja?
     const teacher = await hae(supabase.from('teachers').select('*').eq('id', userId).maybeSingle());
     if (teacher) {
-      who.textContent = 'Opettaja: ' + teacher.first_name + ' ' + teacher.last_name;
+      teacherId = teacher.id;
+      $('who').textContent = 'Opettaja: ' + teacher.first_name + ' ' + teacher.last_name;
       await startTeacher();
       return;
     }
 
-    showError({ message: 'Käyttäjä ei ole opiskelija eikä opettaja.' });
+    showError('Käyttäjä ei ole opiskelija eikä opettaja.');
   } catch (error) {
-    showError(error);
+    showError(error.message);
   }
 }
 
 
-// ---------- OPISKELIJA ----------
+// OPISKELIJA 
 
 async function startStudent() {
   tasks = await hae(supabase.from('assignments')
     .select('id, title, description, due_date, subjects(name)').order('due_date'));
   submissions = await hae(supabase.from('submissions').select('*').eq('student_id', me.id));
+  messages = await hae(supabase.from('messages').select('*')
+    .eq('student_id', me.id).order('created_at', { ascending: false }));
 
-  document.getElementById('backToSubjects').onclick = showSubjects;
+  $('backToSubjects').onclick = showSubjects;
   showSubjects();
-}
-
-// Palauttaa opiskelijan vastauksen tehtävään (tai undefined)
-function findSubmission(taskId) {
-  return submissions.find(s => s.assignment_id === taskId);
 }
 
 // Sivu 1: oppiaineet
 function showSubjects() {
   showPage('subjectsPage');
-  const list = document.getElementById('subjectList');
+  showMessages();
+  const list = $('subjectList');
   list.innerHTML = '';
-  document.getElementById('noTasks').hidden = tasks.length > 0;
+  $('noTasks').hidden = tasks.length > 0;
 
-  // Kerätään jokainen oppiaine vain kerran
-  const names = [];
-  for (const task of tasks) {
-    if (!names.includes(subjectName(task))) names.push(subjectName(task));
-  }
-  names.sort();
+  // Jokainen oppiaine vain kerran, aakkosjärjestyksessä
+  const names = [...new Set(tasks.map(subjectName))].sort();
 
   for (const name of names) {
     const subjectTasks = tasks.filter(t => subjectName(t) === name);
-    const notDone = subjectTasks.filter(t => !findSubmission(t.id)).length;
+    const notDone = subjectTasks.filter(t => !findSubmission(t.id, me.id)).length;
 
     const card = copyTemplate('subjectTemplate');
     card.querySelector('.card-title').textContent = name;
@@ -151,18 +152,52 @@ function showSubjects() {
   }
 }
 
+function showMessages() {
+  const list = $('messageList');
+  list.innerHTML = '';
+  $('messageBox').hidden = messages.length === 0;
+
+  for (const m of messages) {
+    const div = document.createElement('div');
+    div.className = 'message ' + m.type + (m.is_read ? '' : ' unread');
+
+    const head = document.createElement('div');
+    head.className = 'small';
+    head.textContent = (m.type === 'warning' ? '⚠ Varoitus' : 'Viesti') + ' · ' + formatDate(m.created_at);
+
+    const body = document.createElement('div');
+    body.textContent = m.body;
+
+    div.append(head, body);
+    list.appendChild(div);
+  }
+
+  markMessagesRead();
+}
+
+// Merkitään uudet viestit luetuiksi
+async function markMessagesRead() {
+  const unread = messages.filter(m => !m.is_read);
+  if (unread.length === 0) return;
+
+  const { error } = await supabase.from('messages')
+    .update({ is_read: true })
+    .in('id', unread.map(m => m.id));
+
+  if (!error) {
+    for (const m of unread) m.is_read = true;
+  }
+}
+
 // Sivu 2: yhden oppiaineen tehtävät
 function showSubject(name) {
   showPage('subjectPage');
-  document.getElementById('subjectTitle').textContent = name;
-  const list = document.getElementById('taskList');
+  $('subjectTitle').textContent = name;
+  const list = $('taskList');
   list.innerHTML = '';
 
-  for (const task of tasks) {
-    if (subjectName(task) !== name) continue;
-
-    const sub = findSubmission(task.id);
-    const isGraded = sub && sub.status === 'graded'; // arvosteltua ei voi muokata
+  for (const task of tasks.filter(t => subjectName(t) === name)) {
+    const sub = findSubmission(task.id, me.id);
 
     const box = copyTemplate('taskTemplate');
     box.querySelector('.title').textContent = task.title;
@@ -173,7 +208,8 @@ function showSubject(name) {
     const button = box.querySelector('.submit-btn');
     textarea.value = sub ? sub.answer : '';
 
-    if (isGraded) {
+    if (sub && sub.status === 'graded') {
+      // arvosteltua ei voi muokata
       textarea.disabled = true;
       button.hidden = true;
       box.querySelector('.graded').hidden = false;
@@ -193,16 +229,16 @@ async function submitAnswer(task, textarea, button, msg) {
   const answer = textarea.value;
 
   // upsert = lisää uusi tai päivitä vanha
-  const result = await supabase.from('submissions').upsert(
+  const { error } = await supabase.from('submissions').upsert(
     { assignment_id: task.id, student_id: me.id, answer: answer, status: 'submitted' },
     { onConflict: 'assignment_id,student_id' }
   );
 
-  showResult(msg, result.error);
-  if (result.error) return;
+  showResult(msg, error);
+  if (error) return;
 
   // Päivitetään oma lista
-  const existing = findSubmission(task.id);
+  const existing = findSubmission(task.id, me.id);
   if (existing) {
     existing.answer = answer;
   } else {
@@ -212,50 +248,45 @@ async function submitAnswer(task, textarea, button, msg) {
 }
 
 
-// ---------- OPETTAJA ----------
+// OPETTAJA 
 
 async function startTeacher() {
   tasks = await hae(supabase.from('assignments')
     .select('id, title, due_date, class_id, subjects(name)').order('due_date'));
   submissions = await hae(supabase.from('submissions').select('*'));
   students = await hae(supabase.from('students')
-    .select('id, first_name, last_name, email, class_id, classes(name)').order('last_name'));
+    .select('id, first_name, last_name, class_id, classes(name)'));
   const subjects = await hae(supabase.from('subjects').select('id, name').order('name'));
   const classes = await hae(supabase.from('classes').select('id, name').order('name'));
 
   // Täytetään valintalistat uutta tehtävää varten
-  for (const s of subjects) {
-    document.getElementById('newSubject').add(new Option(s.name, s.id));
-  }
-  for (const c of classes) {
-    document.getElementById('newClass').add(new Option(c.name, c.id));
-  }
+  for (const s of subjects) $('newSubject').add(new Option(s.name, s.id));
+  for (const c of classes) $('newClass').add(new Option(c.name, c.id));
 
-  // Napit toimivat aina samalla tavalla, joten ne laitetaan kerran tässä
-  const searchBox = document.getElementById('search');
-  searchBox.oninput = () => showList(searchBox.value);
-  document.getElementById('sortBox').onchange = () => showList(searchBox.value);
-  document.getElementById('newTaskBtn').onclick = showNewTask;
-  document.getElementById('backFromStudent').onclick = showStudents;
-  document.getElementById('backFromNewTask').onclick = showStudents;
-  document.getElementById('saveTaskBtn').onclick = saveTask;
-
+  // Napit toimivat aina samalla tavalla joten ne laitetaan kerran tässä
+  $('search').oninput = showList;
+  $('sortBox').onchange = showList;
+  $('newTaskBtn').onclick = showNewTask;
+  $('backFromStudent').onclick = showStudents;
+  $('backFromNewTask').onclick = showStudents;
+  $('sendMsgBtn').onclick = sendMessage;
+  $('saveTaskBtn').onclick = saveTask;
   showStudents();
 }
 
 // Sivu 1: opiskelijalista ja haku
 function showStudents() {
   showPage('studentsPage');
-  showList(document.getElementById('search').value);
+  showList();
 }
 
-// Järjestää opiskelijat valinnan mukaan: luokka (7A, 7B, 8A...) tai nimi
+// Järjestää opiskelijat joko luokan tai nimen mukaan
 function sortStudents() {
-  const sortBy = document.getElementById('sortBox').value;
+  const sortBy = $('sortBox').value;
 
   students.sort((a, b) => {
     const byName = a.last_name.localeCompare(b.last_name, 'fi') ||
-                   a.first_name.localeCompare(b.first_name, 'fi');
+    a.first_name.localeCompare(b.first_name, 'fi');
     if (sortBy === 'name') return byName;
 
     // Luokan mukaan, ja saman luokan sisällä nimen mukaan
@@ -264,9 +295,9 @@ function sortStudents() {
   });
 }
 
-function showList(searchText) {
-  const search = searchText.trim().toLowerCase();
-  const list = document.getElementById('studentList');
+function showList() {
+  const search = $('search').value.trim().toLowerCase();
+  const list = $('studentList');
   list.innerHTML = '';
   sortStudents();
 
@@ -294,17 +325,18 @@ function showList(searchText) {
 // Sivu 2: yhden opiskelijan tehtävät ja arvostelu
 function showStudent(s) {
   showPage('studentPage');
-  document.getElementById('studentName').textContent = s.last_name + ' ' + s.first_name;
-  document.getElementById('studentEmail').textContent = s.email;
+  currentStudent = s;
+  $('msgText').value = '';
+  $('msgResult').textContent = '';
 
-  const list = document.getElementById('studentTasks');
+  const list = $('studentTasks');
   list.innerHTML = '';
 
   const myTasks = tasks.filter(t => t.class_id === s.class_id);
-  document.getElementById('noStudentTasks').hidden = myTasks.length > 0;
+  $('noStudentTasks').hidden = myTasks.length > 0;
 
   for (const task of myTasks) {
-    const sub = submissions.find(x => x.assignment_id === task.id && x.student_id === s.id);
+    const sub = findSubmission(task.id, s.id);
 
     const box = copyTemplate('studentTaskTemplate');
     box.querySelector('.title').textContent = subjectName(task) + ': ' + task.title;
@@ -323,9 +355,8 @@ function showStudent(s) {
       box.querySelector('.grade').value = sub.grade || '';
       box.querySelector('.feedback').value = sub.feedback || '';
 
-      const gradeBtn = box.querySelector('.grade-btn');
       const article = box.querySelector('.task');
-      gradeBtn.onclick = () => saveGrade(sub, article);
+      box.querySelector('.grade-btn').onclick = () => saveGrade(sub, article);
     }
 
     list.appendChild(box);
@@ -336,12 +367,12 @@ async function saveGrade(sub, box) {
   const grade = box.querySelector('.grade').value;
   const feedback = box.querySelector('.feedback').value;
 
-  const result = await supabase.from('submissions')
+  const { error } = await supabase.from('submissions')
     .update({ grade: grade, feedback: feedback, status: 'graded' })
     .eq('id', sub.id);
 
-  showResult(box.querySelector('.msg'), result.error);
-  if (result.error) return;
+  showResult(box.querySelector('.msg'), error);
+  if (error) return;
 
   // Päivitetään oma lista
   sub.grade = grade;
@@ -354,38 +385,55 @@ async function saveGrade(sub, box) {
   status.className = 'status graded';
 }
 
+async function sendMessage() {
+  const msg = $('msgResult');
+  const body = $('msgText').value.trim();
+
+  if (body === '') {
+    showResult(msg, { message: 'Kirjoita viesti ensin.' });
+    return;
+  }
+
+  const { error } = await supabase.from('messages').insert({
+    student_id: currentStudent.id,
+    teacher_id: teacherId,
+    type: $('msgType').value,
+    body: body
+  });
+
+  showResult(msg, error, 'Lähetetty');
+  if (!error) $('msgText').value = '';
+}
+
 // Sivu 3: uuden tehtävän lomake
 function showNewTask() {
   showPage('newTaskPage');
-  document.getElementById('newTaskMsg').textContent = '';
+  $('newTaskMsg').textContent = '';
 }
 
 async function saveTask() {
-  const msg = document.getElementById('newTaskMsg');
-  const title = document.getElementById('newTitle').value.trim();
-  const description = document.getElementById('newDescription').value.trim();
-  const dueDate = document.getElementById('newDue').value;
+  const msg = $('newTaskMsg');
+  const title = $('newTitle').value.trim();
+  const description = $('newDescription').value.trim();
+  const dueDate = $('newDue').value; 
 
   if (title === '' || description === '') {
     showResult(msg, { message: 'Täytä otsikko ja tehtävänanto.' });
     return;
   }
-  if (dueDate) {
-    const [y, m, d] = dueDate.split('-').map(Number);
-    const due = new Date(y, m - 1, d);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
 
-    if (due < today) {
-      showResult(msg, { message: 'Määräaika ei voi olla menneessä ajassa.' });
-      return;
-    }
+  // Määräaika ei saa olla menneisyydessä
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (dueDate && new Date(dueDate + 'T00:00') < today) {
+    showResult(msg, { message: 'Määräaika ei voi olla menneessä ajassa.' });
+    return;
   }
 
-  const result = await supabase.from('assignments')
+  const { data, error } = await supabase.from('assignments')
     .insert({
-      subject_id: document.getElementById('newSubject').value,
-      class_id: document.getElementById('newClass').value,
+      subject_id: $('newSubject').value,
+      class_id: $('newClass').value,
       title: title,
       description: description,
       due_date: dueDate || null
@@ -393,15 +441,14 @@ async function saveTask() {
     .select('id, title, due_date, class_id, subjects(name)')
     .single();
 
-  showResult(msg, result.error);
-  if (result.error) return;
+  showResult(msg, error);
+  if (error) return;
 
   // Lisätään omaan listaan ja tyhjennetään lomake
-  tasks.push(result.data);
-  document.getElementById('newTitle').value = '';
-  document.getElementById('newDescription').value = '';
-  document.getElementById('newDue').value = '';
+  tasks.push(data);
+  $('newTitle').value = '';
+  $('newDescription').value = '';
+  $('newDue').value = '';
 }
-
 
 main();
